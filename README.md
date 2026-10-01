@@ -1,147 +1,182 @@
-# Sikra Bot
+# Sikra Agency Telegram Bot
 
-Телеграм-бот агентства [Sikra](https://sikra.agency/): рассказывает об услугах, даёт записаться
-на звонок и принимает вопросы от клиентов. Вопросы падают в SQLite и пересылаются админу —
-админ отвечает реплаем в своём чате, ответ автоматически уходит клиенту.
+Telegram bot for [Sikra Agency](https://sikra.agency/): turnkey digital launch for agencies and businesses (website, domain and email, campaigns, databases, CRM, forms and payments).
 
-Стек: Python 3.13, [aiogram 3](https://docs.aiogram.dev/), aiosqlite, python-dotenv.
+The bot introduces the agency, lets clients book a call in a Mini App, answers common questions, and collects custom questions into a database so the admin can reply right from Telegram.
 
----
+## Features
 
-## Возможности
+- `/start` greeting with an inline menu: **About**, **Schedule**, **Question**
+- **About**: short pitch with services and links
+- **Schedule**: opens the Cal.com booking page inside Telegram as a Mini App
+- **Question** menu: Cost, Services, Time, Contact, Back, Write the question
+- **Write the question**: the client's question is saved to SQLite and forwarded to the admin
+- **Admin replies**: the admin replies to the notification in Telegram and the answer goes back to the client
+- `/questions`: list of unanswered questions (admin only)
 
-**Для клиента**
-- `/start` — приветствие с инлайн-кнопками: `about`, `Schedule`, `question`
-- `about` — описание агентства и услуг
-- `Schedule` — открывает форму записи на 30-минутный звонок (cal.com) прямо в Telegram (WebApp)
-- `question` — reply-клавиатура с быстрыми ответами: `Cost`, `Services`, `Time`, `Contact`
-- `Write the question` — свободный вопрос одним сообщением; уходит админу и сохраняется в базу
-- Ответ админа приходит клиенту в личку
+## Tech stack
 
-**Для админа** (только чат с `ADMIN_ID`)
-- `/questions` — список неотвеченных вопросов
-- Ответ реплаем на уведомление `❓ Question #N` — отправляет текст клиенту и помечает вопрос
-  как `answered`
+- Python 3.11+
+- [aiogram 3](https://docs.aiogram.dev/) (Telegram Bot framework)
+- aiosqlite (SQLite database)
+- python-dotenv (configuration)
+- FastAPI + uvicorn (optional, webhook mode)
 
----
-
-## Структура
+## Project structure
 
 ```
-Sikra Bot/
-├── main.py              # точка входа: Dispatcher, токен, init_db, polling
+.
+├── main.py              # entry point (polling)
 ├── Routes/
-│   └── Firstline.py     # все хэндлеры, клавиатуры, тексты, логика ответов админа
+│   └── Firstline.py     # handlers, keyboards, texts
 ├── Forms/
-│   └── Form.py          # FSM-состояние Ask.waiting (ожидание вопроса от клиента)
+│   └── Form.py          # FSM states (Ask.waiting)
 ├── db/
-│   └── db.py            # работа с SQLite: init_db, add_question, get_question,
-│                        #   save_answer, list_open
-├── bot.db               # база SQLite (создаётся автоматически при первом запуске)
-└── .env                 # секреты, в git не коммитится
+│   └── db.py            # SQLite helpers (questions table)
+├── .env                 # secrets (not committed)
+├── .env.example
+└── requirements.txt
 ```
 
-### Схема базы
+Each folder (`Routes`, `Forms`, `db`) should contain an empty `__init__.py`.
 
-Таблица `questions`:
-
-| поле         | тип     | описание                                  |
-|--------------|---------|-------------------------------------------|
-| `id`         | INTEGER | PK, автоинкремент — номер в `Question #N` |
-| `user_id`    | INTEGER | Telegram ID автора вопроса                |
-| `name`       | TEXT    | полное имя пользователя                   |
-| `text`       | TEXT    | текст вопроса                             |
-| `answer`     | TEXT    | ответ админа (NULL пока нет ответа)       |
-| `status`     | TEXT    | `new` → `answered`                        |
-| `created_at` | TEXT    | время создания (UTC, по умолчанию)        |
-
----
-
-## Установка и запуск
-
-### 1. Клонировать и создать окружение
+## Setup
 
 ```bash
-git clone <repo-url>
-cd "Sikra Bot"
+git clone <your-repo-url>
+cd <project-folder>
+
 python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+
+pip install -r requirements.txt
 ```
 
-Активация:
+### requirements.txt
 
-```bash
-# Windows (PowerShell)
-.venv\Scripts\Activate.ps1
-
-# macOS / Linux
-source .venv/bin/activate
+```
+aiogram>=3.13
+python-dotenv
+aiosqlite
+fastapi
+uvicorn
 ```
 
-### 2. Установить зависимости
+### Environment variables
 
-```bash
-pip install aiogram aiosqlite python-dotenv
+Create a `.env` file in the project root (see `.env.example`):
+
 ```
-
-> В репозитории пока нет `requirements.txt` — после установки его стоит зафиксировать:
-> `pip freeze > requirements.txt`
-
-### 3. Создать `.env` в корне проекта
-
-```env
-BOT_TOKEN=123456789:AA...ваш_токен_от_BotFather
+BOT_TOKEN=123456:ABC-your-token
 ADMIN_ID=123456789
+
+# webhook mode only (FastAPI)
+BASE_URL=https://your-domain.com
+WEBHOOK_SECRET=long_random_string
+API_KEY=another_long_random_string
 ```
 
-- `BOT_TOKEN` — токен от [@BotFather](https://t.me/BotFather). Без него бот падает с
-  `ValueError: doesn't have BOT_TOKEN`.
-- `ADMIN_ID` — ваш числовой Telegram ID (узнать можно у [@userinfobot](https://t.me/userinfobot)).
-  Если не задан, подставляется `0` и админские функции работать не будут.
+- `BOT_TOKEN`: get it from [@BotFather](https://t.me/BotFather)
+- `ADMIN_ID`: your numeric Telegram ID, get it from [@userinfobot](https://t.me/userinfobot). Open the bot and press `/start` once so it can message you.
+- Never commit `.env`. Add it to `.gitignore`.
 
-### 4. Запустить
+## Run
+
+### Option 1: polling (simplest, good for development)
 
 ```bash
 python main.py
 ```
 
-В консоли появится `Bot started`. База `bot.db` и таблица создаются автоматически.
+### Option 2: webhook with FastAPI (production)
 
----
+Telegram sends updates to your server over HTTPS, so you need a public HTTPS URL. For local testing use `ngrok http 8000` or `cloudflared tunnel` and put the generated URL in `BASE_URL`.
 
-## Как это работает
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
 
-1. Клиент жмёт `question` → `Write the question` — бот ставит FSM-состояние `Ask.waiting`
-   и убирает клавиатуру.
-2. Следующее текстовое сообщение клиента попадает в `add_question()`, состояние сбрасывается,
-   клиент получает подтверждение.
-3. Админу приходит сообщение вида `❓ Question #12 from Имя`.
-4. Админ отвечает **реплаем** на это уведомление. Хэндлер вытаскивает номер регуляркой
-   `Question #(\d+)`, шлёт текст клиенту через `bot.send_message(user_id, ...)` и вызывает
-   `save_answer()`.
+This mode uses `main.py` with the FastAPI app:
 
-Весь пользовательский текст экранируется через `html.escape()` перед отправкой с
-`parse_mode="HTML"`.
+```python
+'''from fastapi import FastAPI, Header, HTTPException, Request
 
----
+app = FastAPI(lifespan=lifespan)
 
-## Настройка контента
+@app.post("/webhook")
+async def webhook(request: Request,
+                  x_telegram_bot_api_secret_token: str | None = Header(default=None)):
+    if x_telegram_bot_api_secret_token != WEBHOOK_SECRET:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    update = Update.model_validate(await request.json(), context={"bot": bot})
+    await dp.feed_update(bot, update)
+    return {"ok": True}
 
-Всё редактируется в [`Routes/Firstline.py`](Routes/Firstline.py):
+@app.get("/health")
+async def health():
+    return {"status": "ok"}'''
+```
 
-- `SCHEDULE_URL` — ссылка на cal.com для кнопки `Schedule` (обязательно HTTPS, иначе
-  Telegram не откроет WebApp)
-- `about_text` — текст кнопки `about`
-- хэндлеры `cost()`, `services()`, `time_()`, `contact()` — быстрые ответы
-- `first_keyboard()` / `question_keyboard()` — наборы кнопок
+Notes:
 
----
+- Run a single process (no `--workers`), because FSM state is stored in memory.
+- Polling and webhook cannot be used at the same time. Setting the webhook disables polling.
 
-## Заметки
+#### Optional: questions API
 
-- `bot.db` сейчас закоммичен в репозиторий — если в нём появятся реальные обращения
-  клиентов, стоит добавить `bot.db` в `.gitignore` и удалить файл из индекса
-  (`git rm --cached bot.db`).
-- Бот работает на long polling — вебхук не настроен, отдельный сервер/домен не нужен.
-- Админ один. Для нескольких админов `ADMIN_ID` нужно переделать в список и заменить
-  фильтры `F.chat.id == admin_id`.
-- `/questions` показывает только вопросы со статусом `new`, отсортированные по `id`.
+```python
+'''@app.get("/api/questions")
+async def api_questions(x_api_key: str | None = Header(default=None)):
+    if not API_KEY or x_api_key != API_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return [dict(r) for r in await list_open()]'''
+```
+
+```bash
+curl -H "X-API-Key: your_key" https://your-domain.com/api/questions
+```
+
+## How questions work
+
+1. Client opens **Question** and taps **Write the question**.
+2. Client sends the text. The bot saves it to `bot.db` and sends the admin a notification: `Question #N from <name>`.
+3. Admin replies (Telegram **Reply**) to that notification.
+4. The bot finds `#N`, sends the answer to the client and marks the question as answered.
+
+Important: the admin must reply to the notification message itself, and must not delete or edit it.
+
+## Database
+
+SQLite file `bot.db`, created automatically on start.
+
+| column     | type    | description                  |
+|------------|---------|------------------------------|
+| id         | INTEGER | question number              |
+| user_id    | INTEGER | client's Telegram ID         |
+| name       | TEXT    | client's name                |
+| text       | TEXT    | question                     |
+| answer     | TEXT    | admin's answer               |
+| status     | TEXT    | `new` or `answered`          |
+| created_at | TEXT    | creation time                |
+
+When deploying (Docker, Railway, etc.), keep `bot.db` on a persistent volume, otherwise questions are lost on restart.
+
+## BotFather setup
+
+- `/mybots` > your bot > **Edit Bot** > **Edit Description**: text shown above the START button
+- **Edit Commands**: `start - Start the bot`
+- Optional: **Bot Settings** > **Menu Button** to open the booking page directly
+
+## Security notes
+
+- Keep `BOT_TOKEN` secret. If it leaks, revoke it in BotFather (**API Token** > **Revoke**).
+- Admin-only handlers check `ADMIN_ID` (as an integer).
+- All user text is passed through `html.escape` before being sent with `parse_mode="HTML"`.
+- Webhook requests are verified with `WEBHOOK_SECRET`.
+
+## Contacts
+
+- Website: https://sikra.agency/
+- Email: hello@sikra.agency
+- Instagram: https://www.instagram.com/sikraagency/
+- TikTok: https://www.tiktok.com/@sikraagency
