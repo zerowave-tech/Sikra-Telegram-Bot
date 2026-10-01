@@ -168,5 +168,3 @@ async def admin_answer(msg: Message, bot: Bot) -> None:
     await save_answer(q["id"], msg.text)
     await msg.answer("✅ Sent")
 
-
-
